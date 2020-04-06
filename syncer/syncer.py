@@ -48,11 +48,11 @@ def get_plugin(org: str, repo: str, artifact_name: str, output_path: Path, workf
                 fz.extract(zipinfo, output_path)
 
 
-def process_line(values: list, output_dir: Path, auth: tuple):
+def process_line(values: list, output_dir: str, auth: tuple):
     org_name, repo_name, artifact_name, workflow_name = values
 
     print("Fetching plugin {repo_name}...".format(repo_name=repo_name))
-    get_plugin(org_name, repo_name, artifact_name, output_dir, workflow_name=workflow_name, auth=auth)
+    get_plugin(org_name, repo_name, artifact_name, Path(output_dir), workflow_name=workflow_name, auth=auth)
 
 
 if __name__ == "__main__":
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     parser.add_argument('-u', '--username', type=str, help='github username', required=True)
     parser.add_argument('-t', '--token', type=str, help='github token', required=True)
     parser.add_argument('file', type=argparse.FileType('r'), help='path to repo file')
-    parser.add_argument('output_dir', type=Path, help='output directory')
+    parser.add_argument('output_dir', type=str, help='output directory')
 
     args = parser.parse_args()
 
