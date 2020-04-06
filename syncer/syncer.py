@@ -43,8 +43,6 @@ def get_plugin(org: str, repo: str, artifact_name: str, output_path: Path, workf
                     return
                 zipinfo = fz.getinfo(fz.namelist()[0])
 
-                zipinfo.filename = repo + ".jar"
-
                 fz.extract(zipinfo, str(output_path))
 
 
