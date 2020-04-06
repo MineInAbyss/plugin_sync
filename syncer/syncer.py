@@ -45,7 +45,7 @@ def get_plugin(org: str, repo: str, artifact_name: str, output_path: Path, workf
 
                 zipinfo.filename = repo + ".jar"
 
-                fz.extract(zipinfo, output_path)
+                fz.extract(zipinfo, str(output_path))
 
 
 def process_line(values: list, output_dir: str, auth: tuple):
