@@ -9,14 +9,17 @@ import requests
 
 def get_plugin(org: str, repo: str, artifact_name: str, output_path: Path, workflow_name: str = None,
                workflow_id: str = None, auth: tuple = None):
-    repo_endpoint = f'https://api.github.com/repos/{org}/{repo}'
+    repo_endpoint = 'https://api.github.com/repos/{org}/{repo}'.format(org=org, repo=repo)
 
     if workflow_id is None:
-        workflows = requests.get(f"{repo_endpoint}/actions/workflows", auth=auth).json()
+        workflows = requests.get("{repo_endpoint}/actions/workflows".format(repo_endpoint=repo_endpoint),
+                                 auth=auth).json()
 
         workflow_id = next(x for x in workflows["workflows"] if x['name'] == workflow_name)["id"]
 
-    runs = requests.get(f"{repo_endpoint}/actions/workflows/{workflow_id}/runs", auth=auth,
+    runs = requests.get("{repo_endpoint}/actions/workflows/{workflow_id}/runs".format(repo_endpoint=repo_endpoint,
+                                                                                      workflow_id=workflow_id),
+                        auth=auth,
                         params={"branch": "master", "status": "success"}).json()
 
     if runs['total_count'] >= 0:
@@ -40,7 +43,7 @@ def get_plugin(org: str, repo: str, artifact_name: str, output_path: Path, workf
                     return
                 zipinfo = fz.getinfo(fz.namelist()[0])
 
-                zipinfo.filename = f"{repo}.jar"
+                zipinfo.filename = repo + ".jar"
 
                 fz.extract(zipinfo, output_path)
 
@@ -48,7 +51,7 @@ def get_plugin(org: str, repo: str, artifact_name: str, output_path: Path, workf
 def process_line(values: list, output_dir: Path, auth: tuple):
     org_name, repo_name, artifact_name, workflow_name = values
 
-    print(f"Fetching plugin {repo_name}...")
+    print("Fetching plugin {repo_name}...".format(repo_name=repo_name))
     get_plugin(org_name, repo_name, artifact_name, output_dir, workflow_name=workflow_name, auth=auth)
 
 
