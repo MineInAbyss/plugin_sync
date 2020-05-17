@@ -1,56 +1,44 @@
 import argparse
-import csv
-import zipfile
+import re
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 
 import requests
+import yaml
 
 
-def get_plugin(org: str, repo: str, artifact_name: str, output_path: Path, workflow_name: str = None,
-               workflow_id: str = None, auth: tuple = None):
+def download_plugin_from_github(org: str, repo: str, output_path: Path, artifacts=(r".*\..jar",), tag: str = None,
+                                auth: tuple = None):
     repo_endpoint = 'https://api.github.com/repos/{org}/{repo}'.format(org=org, repo=repo)
 
-    if workflow_id is None:
-        workflows = requests.get("{repo_endpoint}/actions/workflows".format(repo_endpoint=repo_endpoint),
-                                 auth=auth).json()
+    patterns = (re.compile(pattern) for pattern in artifacts)
 
-        workflow_id = next(x for x in workflows["workflows"] if x['name'] == workflow_name)["id"]
+    if tag:
+        release_info = requests.get(
+            "{repo_endpoint}/releases/tags/{tag}".format(repo_endpoint=repo_endpoint, tag=tag),
+            auth=auth,
+            params={"branch": "master", "status": "success"}).json()
+    else:
+        release_info = requests.get("{repo_endpoint}/releases/latest".format(repo_endpoint=repo_endpoint),
+                                    auth=auth,
+                                    params={"branch": "master", "status": "success"}).json()
 
-    runs = requests.get("{repo_endpoint}/actions/workflows/{workflow_id}/runs".format(repo_endpoint=repo_endpoint,
-                                                                                      workflow_id=workflow_id),
-                        auth=auth,
-                        params={"branch": "master", "status": "success"}).json()
+    if "id" in release_info:
+        jar_urls = {asset["name"]: asset["browser_download_url"] for asset in release_info.get("assets", []) if
+                    any(pattern.match(asset["name"]) for pattern in patterns)}
 
-    if runs['total_count'] >= 0:
-        latest_run = runs['workflow_runs'][0]
+        if not jar_urls:
+            print("Release {} does not contain a matching asset".format(release_info["html_url"]))
+            return
 
-        artifacts_url = latest_run['artifacts_url']
+        for name, jar_url in jar_urls.items():
+            with open(Path(output_path, name), "wb") as f:
+                r = requests.get(jar_url, auth=auth,
+                                 allow_redirects=True)
 
-        artifacts = requests.get(artifacts_url, auth=auth).json()['artifacts']
-
-        archive_download_url = next(x for x in artifacts if x['name'] == artifact_name)['archive_download_url']
-
-        with NamedTemporaryFile(delete=True) as f:
-            r = requests.get(archive_download_url, auth=auth,
-                             allow_redirects=True)
-
-            f.write(r.content)
-
-            with zipfile.ZipFile(f) as fz:
-                if len(fz.namelist()) != 1:
-                    print("Artifact should have only one jar")
-                    return
-                zipinfo = fz.getinfo(fz.namelist()[0])
-
-                fz.extract(zipinfo, str(output_path))
-
-
-def process_line(values: list, output_dir: str, auth: tuple):
-    org_name, repo_name, artifact_name, workflow_name = values
-
-    print("Fetching plugin {repo_name}...".format(repo_name=repo_name))
-    get_plugin(org_name, repo_name, artifact_name, Path(output_dir), workflow_name=workflow_name, auth=auth)
+                f.write(r.content)
+                print("{}/{} successfully fetched {}".format(org, repo, name))
+    else:
+        print("{}/{} does not contain a matching release".format(org, repo))
 
 
 if __name__ == "__main__":
@@ -64,6 +52,11 @@ if __name__ == "__main__":
 
     auth = (args.username, args.token)
 
-    repo_reader = csv.reader(args.file, skipinitialspace=True)
-    for row in repo_reader:
-        process_line(row, args.output_dir, auth)
+    config = yaml.safe_load(args.file)
+
+    for org in config.get("github", []):
+        org_name = org["org"]
+        for repo_name, options in org["repos"].items():
+            download_plugin_from_github(org_name, repo_name, args.output_dir,
+                                        artifacts=options.get("artifacts", (r".*\.jar",)),
+                                        tag=options.get("tag"), auth=auth)
